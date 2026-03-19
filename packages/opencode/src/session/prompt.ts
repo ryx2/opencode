@@ -561,6 +561,7 @@ export namespace SessionPrompt {
       const agent = await Agent.get(lastUser.agent)
       const maxSteps = agent.steps ?? Infinity
       const isLastStep = step >= maxSteps
+      const shouldStopOnMaxSteps = isLastStep && agent.stopOnMaxSteps === true
       msgs = await insertReminders({
         messages: msgs,
         agent,
@@ -672,7 +673,7 @@ export namespace SessionPrompt {
         system,
         messages: [
           ...MessageV2.toModelMessages(msgs, model),
-          ...(isLastStep
+          ...(isLastStep && !shouldStopOnMaxSteps
             ? [
                 {
                   role: "assistant" as const,
@@ -708,6 +709,14 @@ export namespace SessionPrompt {
           await Session.updateMessage(processor.message)
           break
         }
+      }
+
+      if (shouldStopOnMaxSteps) {
+        if (!modelFinished && !processor.message.error) {
+          processor.message.finish = "step-limit"
+          await Session.updateMessage(processor.message)
+        }
+        break
       }
 
       if (result === "stop") break
